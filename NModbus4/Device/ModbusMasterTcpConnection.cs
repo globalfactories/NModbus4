@@ -1,4 +1,4 @@
-﻿namespace Modbus.Device
+namespace Modbus.Device
 {
     using System;
     using System.Diagnostics;
@@ -6,7 +6,7 @@
     using System.Linq;
     using System.Net;
     using System.Net.Sockets;
-
+    using System.Runtime.Remoting.Messaging;
     using IO;
     using Message;
 
@@ -24,6 +24,7 @@
         private readonly AsyncCallback _readHeaderCompletedCallback;
         private readonly AsyncCallback _readFrameCompletedCallback;
         private readonly AsyncCallback _writeCompletedCallback;
+        private bool _disposing;
 
         private readonly byte[] _mbapHeader = new byte[6];
         private byte[] _messageFrame;
@@ -149,6 +150,13 @@
             {
                 Debug.WriteLine("Exception processing request: [{0}] {1}", ex.GetType().Name, ex.Message);
 
+                // If a NullReferenceException exception is thrown during disposal, ignore the exception as this is a common occurrence when the master is still communicating.
+                if ((ex is NullReferenceException) && _disposing)
+                {
+                    Debug.WriteLine($"NullReferenceException caught during disposal of ModbusMasterTcpConnection and is ignored. This is likely expected behavior, nevertheless the exception caught was: {ex}.");
+                    return;
+                }
+
                 // This will typically result in the exception being unhandled, which will terminate the thread pool thread and
                 // thereby the process, depending on the process's configuration. Such a crash would cause all connections to be
                 // dropped, even if the slave were restarted.
@@ -161,6 +169,7 @@
 
         protected override void Dispose(bool disposing)
         {
+            _disposing = disposing;
             if (disposing)
             {
                 _stream.Dispose();
